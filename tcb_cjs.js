@@ -1,0 +1,37 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+var app_1 = __importDefault(require("@cloudbase/app"));
+var auth_1 = require("@cloudbase/auth");
+var functions_1 = require("@cloudbase/functions");
+var storage_1 = require("@cloudbase/storage");
+var realtime_1 = require("@cloudbase/realtime");
+var analytics_1 = require("@cloudbase/analytics");
+var model_1 = require("@cloudbase/model");
+var ai_1 = require("@cloudbase/ai");
+var cloudrun_1 = require("@cloudbase/cloudrun");
+var database_1 = require("./../database");
+var package_json_1 = __importDefault(require("../package.json"));
+var version = package_json_1.default.version;
+app_1.default.registerVersion(version);
+try {
+    (0, auth_1.registerAuth)(app_1.default);
+    (0, functions_1.registerFunctions)(app_1.default);
+    (0, storage_1.registerStorage)(app_1.default);
+    (0, database_1.registerDatabase)(app_1.default);
+    (0, realtime_1.registerRealtime)(app_1.default);
+    (0, analytics_1.registerAnalytics)(app_1.default);
+    (0, model_1.registerModel)(app_1.default);
+    (0, ai_1.registerAi)(app_1.default);
+    (0, cloudrun_1.registerCloudrun)(app_1.default);
+}
+catch (e) { }
+try {
+    window.cloudbase = app_1.default;
+}
+catch (e) { }
+exports.default = app_1.default;
+module.exports = app_1.default;
+
+//# sourceMappingURL=data:application/json;charset=utf8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIi4uLy4uL2luZGV4LnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7QUFBQSx1REFBc0M7QUFDdEMsd0NBQThDO0FBQzlDLGtEQUF3RDtBQUN4RCw4Q0FBb0Q7QUFDcEQsZ0RBQXNEO0FBQ3RELGtEQUF3RDtBQUN4RCwwQ0FBZ0Q7QUFDaEQsb0NBQTBDO0FBQzFDLGdEQUFzRDtBQUV0RCwwQ0FBZ0Q7QUFDaEQsaUVBQWlDO0FBR3pCLElBQUEsT0FBTyxHQUFLLHNCQUFHLFFBQVIsQ0FBUTtBQUN2QixhQUFTLENBQUMsZUFBZSxDQUFDLE9BQU8sQ0FBQyxDQUFBO0FBRWxDLElBQUk7SUFDRixJQUFBLG1CQUFZLEVBQUMsYUFBUyxDQUFDLENBQUE7SUFDdkIsSUFBQSw2QkFBaUIsRUFBQyxhQUFTLENBQUMsQ0FBQTtJQUM1QixJQUFBLHlCQUFlLEVBQUMsYUFBUyxDQUFDLENBQUE7SUFDMUIsSUFBQSwyQkFBZ0IsRUFBQyxhQUFTLENBQUMsQ0FBQTtJQUMzQixJQUFBLDJCQUFnQixFQUFDLGFBQVMsQ0FBQyxDQUFBO0lBQzNCLElBQUEsNkJBQWlCLEVBQUMsYUFBUyxDQUFDLENBQUE7SUFDNUIsSUFBQSxxQkFBYSxFQUFDLGFBQVMsQ0FBQyxDQUFBO0lBQ3hCLElBQUEsZUFBVSxFQUFDLGFBQVMsQ0FBQyxDQUFBO0lBQ3JCLElBQUEsMkJBQWdCLEVBQUMsYUFBUyxDQUFDLENBQUE7Q0FDNUI7QUFBQyxPQUFPLENBQUMsRUFBRSxHQUFFO0FBT2QsSUFBSTtJQUNELE1BQWlCLENBQUMsU0FBUyxHQUFHLGFBQVMsQ0FBQTtDQUN6QztBQUFDLE9BQU8sQ0FBQyxFQUFFLEdBQUU7QUFHZCxrQkFBZSxhQUFTLENBQUE7QUFEeEIsaUJBQVMsYUFBUyxDQUFBIiwiZmlsZSI6ImluZGV4LmNqcy5qcyIsInNvdXJjZXNDb250ZW50IjpbImltcG9ydCBjbG91ZGJhc2UgZnJvbSAnQGNsb3VkYmFzZS9hcHAnXG5pbXBvcnQgeyByZWdpc3RlckF1dGggfSBmcm9tICdAY2xvdWRiYXNlL2F1dGgnXG5pbXBvcnQgeyByZWdpc3RlckZ1bmN0aW9ucyB9IGZyb20gJ0BjbG91ZGJhc2UvZnVuY3Rpb25zJ1xuaW1wb3J0IHsgcmVnaXN0ZXJTdG9yYWdlIH0gZnJvbSAnQGNsb3VkYmFzZS9zdG9yYWdlJ1xuaW1wb3J0IHsgcmVnaXN0ZXJSZWFsdGltZSB9IGZyb20gJ0BjbG91ZGJhc2UvcmVhbHRpbWUnXG5pbXBvcnQgeyByZWdpc3RlckFuYWx5dGljcyB9IGZyb20gJ0BjbG91ZGJhc2UvYW5hbHl0aWNzJ1xuaW1wb3J0IHsgcmVnaXN0ZXJNb2RlbCB9IGZyb20gJ0BjbG91ZGJhc2UvbW9kZWwnXG5pbXBvcnQgeyByZWdpc3RlckFpIH0gZnJvbSAnQGNsb3VkYmFzZS9haSdcbmltcG9ydCB7IHJlZ2lzdGVyQ2xvdWRydW4gfSBmcm9tICdAY2xvdWRiYXNlL2Nsb3VkcnVuJ1xuLy8gQHRzLWlnbm9yZVxuaW1wb3J0IHsgcmVnaXN0ZXJEYXRhYmFzZSB9IGZyb20gJy4vLi4vZGF0YWJhc2UnXG5pbXBvcnQgcGtnIGZyb20gJy4uL3BhY2thZ2UuanNvbidcbmltcG9ydCB7IElDbG91ZGJhc2UgfSBmcm9tICdAY2xvdWRiYXNlL3R5cGVzJ1xuXG5jb25zdCB7IHZlcnNpb24gfSA9IHBrZ1xuY2xvdWRiYXNlLnJlZ2lzdGVyVmVyc2lvbih2ZXJzaW9uKVxuXG50cnkge1xuICByZWdpc3RlckF1dGgoY2xvdWRiYXNlKVxuICByZWdpc3RlckZ1bmN0aW9ucyhjbG91ZGJhc2UpXG4gIHJlZ2lzdGVyU3RvcmFnZShjbG91ZGJhc2UpXG4gIHJlZ2lzdGVyRGF0YWJhc2UoY2xvdWRiYXNlKVxuICByZWdpc3RlclJlYWx0aW1lKGNsb3VkYmFzZSlcbiAgcmVnaXN0ZXJBbmFseXRpY3MoY2xvdWRiYXNlKVxuICByZWdpc3Rlck1vZGVsKGNsb3VkYmFzZSlcbiAgcmVnaXN0ZXJBaShjbG91ZGJhc2UpXG4gIHJlZ2lzdGVyQ2xvdWRydW4oY2xvdWRiYXNlKVxufSBjYXRjaCAoZSkge31cblxuZGVjbGFyZSBnbG9iYWwge1xuICBpbnRlcmZhY2UgV2luZG93IHtcbiAgICBjbG91ZGJhc2U6IElDbG91ZGJhc2VcbiAgfVxufVxudHJ5IHtcbiAgKHdpbmRvdyBhcyBXaW5kb3cpLmNsb3VkYmFzZSA9IGNsb3VkYmFzZVxufSBjYXRjaCAoZSkge31cbi8vIEB0cy1pZ25vcmVcbmV4cG9ydCA9IGNsb3VkYmFzZVxuZXhwb3J0IGRlZmF1bHQgY2xvdWRiYXNlXG4iXX0=
