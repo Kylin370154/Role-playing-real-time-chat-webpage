@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>怡笼精神病院 - 角色扮演系统</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- 加载屏 -->
+<div id="loading-screen">
+  <div class="loading-icon-wrap"><span class="loading-icon-char">怡</span></div>
+  <div class="loading-title">怡笼精神病院</div>
+  <div class="loading-sub">YILONG PSYCHIATRIC HOSPITAL - RP SYSTEM</div>
+  <div class="loading-spinner"></div>
+  <div style="margin-top:16px;font-size:12px;color:#8b949e">正在连接云端数据库...</div>
+</div>
+
+<!-- 主 App -->
+<div id="app">
+<div class="app-root" v-cloak>
+
+  <!-- 初始化错误提示 -->
+  <template v-if="initError">
+    <div class="login-screen">
+      <div class="login-card" style="text-align:center">
+        <div class="login-header">
+          <div class="login-logo-wrap"><span class="login-logo-char" style="background:#f8514925;color:#f85149">!</span></div>
+          <div class="login-title" style="color:#f85149">连接失败</div>
+          <div class="login-subtitle">{{ initError }}</div>
+        </div>
+        <div style="font-size:13px;color:var(--txt2);margin:16px 0;line-height:1.8">
+          请检查 <code>js/config.js</code> 中的 CloudBase 环境 ID 配置<br>
+          并确保已在 CloudBase 控制台完成以下设置:<br>
+          1. 开启匿名登录<br>
+          2. 创建数据库集合 (users, messages, game_state, char_states)<br>
+          3. 设置安全规则为允许读写<br>
+          4. 添加当前域名到安全域名列表
+        </div>
+        <button class="btn btn-primary btn-full" @click="location.reload()">重试</button>
+      </div>
+    </div>
+  </template>
+
+  <!-- ================================================
+       登录页
+  ================================================ -->
+  <template v-else-if="view === 'login'">
+  <div class="login-screen">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo-wrap"><span class="login-logo-char">怡</span></div>
+        <div class="login-title">精神病院</div>
+        <div class="login-subtitle">YILONG PSYCHIATRIC HOSPITAL - RP SYSTEM</div>
+      </div>
+
+      <!-- 角色选择网格 -->
+      <div class="section-label">选择角色</div>
+      <div class="char-grid">
+        <div v-for="u in allUsers" :key="u.userId"
+             class="char-card" :class="{ selected: loginUserId === u.userId }"
+             @click="selectUser(u.userId)">
+          <div class="avatar-circle"
+               :style="{ background: (u.color||'#4e9ae1')+'25', color: u.color||'#4e9ae1', border:'1px solid '+(u.color||'#4e9ae1')+'50' }">
+            {{ u.avatar || u.name.charAt(0) }}
+          </div>
+          <div class="char-info">
+            <div class="char-name">{{ u.name }}</div>
+            <div class="char-title-text">{{ ROLE_CONFIG[u.role]?.label || u.role }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 选中角色预览 -->
+      <div class="char-preview" v-if="selectedUserData()">
+        <strong>{{ selectedUserData().name }}</strong>
+        &nbsp;<span style="opacity:.6;font-size:11px">{{ selectedUserData().title }}</span><br>
+        <span style="font-size:12px">{{ selectedUserData().description }}</span>
+      </div>
+
+      <!-- 密码输入 -->
+      <div class="input-group">
+        <label class="input-label">密码</label>
+        <input class="input-field" type="password" v-model="loginPwd"
+               placeholder="输入角色密码" @keydown.enter="doLogin">
+      </div>
+      <div class="error-msg" v-if="loginError">{{ loginError }}</div>
+
+      <button class="btn btn-primary btn-full" @click="doLogin" :disabled="loginLoading">
+        {{ loginLoading ? '登录中...' : '进入病院' }}
+      </button>
+      <div class="login-hint">
+        首次加入? <span class="link-btn" @click="goRegister">创建自定义角色</span>
+        <br>预设角色密码: <code>1234</code>
+      </div>
+    </div>
+  </div>
+  </template>
+
+  <!-- ================================================
+       注册页
+  ================================================ -->
+  <template v-else-if="view === 'register'">
+  <div class="login-screen">
+    <div class="login-card" style="width:560px">
+      <div class="login-header">
+        <div class="login-logo-wrap"><span class="login-logo-char">怡</span></div>
+        <div class="login-title">创建角色</div>
+        <div class="login-subtitle">为你的角色建立档案</div>
+      </div>
+
+      <!-- 身份选择 -->
+      <div class="input-group">
+        <label class="input-label">身份类型</label>
+        <select class="input-field" v-model="regRole">
+          <template v-for="grp in roleGroups" :key="grp.label">
+            <optgroup :label="'-- ' + grp.label + ' --'">
+              <option v-for="r in grp.roles" :key="r.id" :value="r.id">
+                {{ r.label }}
+              </option>
+            </optgroup>
+          </template>
+        </select>
+      </div>
+
+      <!-- 身份说明 -->
+      <div class="role-preview-bar" v-if="regRole">
+        <div class="avatar-circle avatar-sm"
+             :style="{ background: (regRoleConfig.color||'#4e9ae1')+'25',
+                       color: regRoleConfig.color||'#4e9ae1',
+                       border:'1px solid '+(regRoleConfig.color||'#4e9ae1')+'60' }">
+          {{ regName.charAt(0) || '?' }}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">{{ regRoleConfig.label || regRole }}</div>
+          <div style="font-size:11px;color:var(--txt2);margin-top:2px">
+            初始物品: {{ (regRoleConfig.items||[]).join(', ') || '无' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 角色信息 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="input-group" style="margin-bottom:0">
+          <label class="input-label">角色名称 *</label>
+          <input class="input-field" v-model="regName" placeholder="在游戏中显示的名字" maxlength="12">
+        </div>
+        <div class="input-group" style="margin-bottom:0">
+          <label class="input-label">头衔/身份标签 (可选)</label>
+          <input class="input-field" v-model="regTitle" placeholder="如: 15号病房患者">
+        </div>
+      </div>
+
+      <div class="input-group" style="margin-top:10px">
+        <label class="input-label">角色背景简介 (可选)</label>
+        <textarea class="input-field" v-model="regDesc" rows="3"
+                  placeholder="介绍你的角色故事、个性特点等, 会显示在角色卡上..."></textarea>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="input-group" style="margin-bottom:0">
+          <label class="input-label">密码 * (至少 3 位)</label>
+          <input class="input-field" type="password" v-model="regPwd" placeholder="设置登录密码">
+        </div>
+        <div class="input-group" style="margin-bottom:0">
+          <label class="input-label">确认密码 *</label>
+          <input class="input-field" type="password" v-model="regPwd2" placeholder="再次输入密码"
+                 @keydown.enter="doRegister">
+        </div>
+      </div>
+
+      <div class="error-msg" style="margin-top:12px" v-if="regError">{{ regError }}</div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn btn-ghost" style="flex:0 0 90px" @click="view='login'">返回</button>
+        <button class="btn btn-primary" style="flex:1" @click="doRegister" :disabled="regLoading">
+          {{ regLoading ? '创建中...' : '创建并进入病院' }}
+        </button>
+      </div>
+    </div>
+  </div>
+  </template>
+
+  <!-- ================================================
+       个人主页页面
+  ================================================ -->
+  <template v-else-if="view === 'profile'">
+  <div class="profile-page">
+    <div class="profile-wrap">
+
+      <!-- 顶部导航 -->
+      <div class="profile-topbar">
+        <button class="btn btn-ghost btn-sm" @click="closeProfile">
+          <span>&larr;</span> 返回主病院
+        </button>
+        <span class="profile-topbar-title">个人档案编辑</span>
+        <span style="flex:1"></span>
+        <button class="btn btn-danger btn-sm" @click="doLogout">退出登录</button>
+      </div>
+
+      <div class="profile-body">
+
+        <!-- 左侧: 角色卡预览 -->
+        <div class="profile-card-col">
+          <div class="profile-card">
+            <div style="text-align:center;padding:20px 0 14px">
+              <div class="avatar-circle avatar-xl" style="margin:0 auto 12px"
+                   :style="{ background:(char?.color||'#4e9ae1')+'25',
+                             color: char?.color||'#4e9ae1',
+                             border:'2px solid '+(char?.color||'#4e9ae1')+'60' }">
+                {{ char?.avatar || char?.name?.charAt(0) }}
+              </div>
+              <div style="font-size:18px;font-weight:700">{{ profName || char?.name }}</div>
+              <div style="font-size:12px;color:var(--txt2);margin-top:4px">{{ char?.title }}</div>
+              <div class="tag-role" style="display:inline-block;margin-top:8px"
+                   :style="{ color: roleConfig.color||'var(--blue)',
+                             borderColor: (roleConfig.color||'var(--blue)')+'60',
+                             background: (roleConfig.color||'#4e9ae1')+'15' }">
+                {{ roleConfig.label || char?.role }}
+              </div>
+            </div>
+            <div class="divider"></div>
+
+            <!-- 当前属性展示 -->
+            <div style="padding:0 4px">
+              <template v-if="isPatient">
+                <div class="section-label">角色属性</div>
+                <div class="stat-row"><span class="stat-name">精神值</span><span class="stat-val">{{ charState.sanity ?? 65 }} / 100</span></div>
+                <div class="prog-bar"><div class="prog-fill fill-purple" :style="{width:(charState.sanity??65)+'%'}"></div></div>
+                <div class="stat-row"><span class="stat-name">信任度</span><span class="stat-val">{{ charState.trust ?? 50 }} / 100</span></div>
+                <div class="prog-bar"><div class="prog-fill fill-teal" :style="{width:(charState.trust??50)+'%'}"></div></div>
+                <div class="stat-row" style="margin-top:6px">
+                  <span class="stat-name">记忆碎片</span>
+                  <span class="stat-val">{{ charState.memoryFragments ?? 0 }} / {{ charState.maxFragments ?? 8 }}</span>
+                </div>
+                <div class="prog-bar"><div class="prog-fill fill-blue" :style="{width:((charState.memoryFragments??0)/(charState.maxFragments||8)*100)+'%'}"></div></div>
+                <div class="stat-row" style="margin-top:4px">
+                  <span class="stat-name">今日用药</span>
+                  <span class="med-badge" :class="charState.medication ? 'med-ok' : 'med-no'">
+                    {{ charState.medication ? '已服药' : '未服药' }}
+                  </span>
+                </div>
+              </template>
+              <template v-else-if="isStaff">
+                <div class="section-label">角色属性</div>
+                <div class="stat-row"><span class="stat-name">压力值</span><span class="stat-val">{{ charState.stress ?? 30 }} / 100</span></div>
+                <div class="prog-bar"><div class="prog-fill fill-orange" :style="{width:(charState.stress??30)+'%'}"></div></div>
+                <div class="stat-row"><span class="stat-name">权限等级</span><span class="stat-val">{{ charState.authority ?? 60 }} / 100</span></div>
+                <div class="prog-bar"><div class="prog-fill fill-blue" :style="{width:(charState.authority??60)+'%'}"></div></div>
+              </template>
+              <template v-else>
+                <div class="section-label">角色属性</div>
+                <div class="stat-row"><span class="stat-name">信任度</span><span class="stat-val">{{ charState.trust ?? 60 }} / 100</span></div>
+                <div class="prog-bar"><div class="prog-fill fill-teal" :style="{width:(charState.trust??60)+'%'}"></div></div>
+              </template>
+
+              <div class="divider"></div>
+              <div class="section-label">携带物品</div>
+              <div v-if="charState.items && charState.items.length" class="items-box">
+                <div class="item-chip" v-for="(item,i) in charState.items" :key="i">
+                  <span style="font-size:12px;flex:1">{{ item }}</span>
+                </div>
+              </div>
+              <div class="empty-small" v-else>暂无物品</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧: 编辑表单 -->
+        <div class="profile-form-col">
+
+          <div class="profile-section">
+            <div class="profile-section-title">基本信息</div>
+            <div class="input-group">
+              <label class="input-label">角色名称</label>
+              <input class="input-field" v-model="profName" placeholder="角色在游戏中显示的名字" maxlength="12">
+            </div>
+            <div class="input-group">
+              <label class="input-label">身份标签 (只读)</label>
+              <input class="input-field" :value="char?.title" disabled style="opacity:.5;cursor:not-allowed">
+            </div>
+            <div class="input-group">
+              <label class="input-label">角色背景简介</label>
+              <textarea class="input-field" v-model="profDesc" rows="5"
+                        placeholder="描述你的角色故事、个性特点, 将显示在角色卡上..."></textarea>
+            </div>
+          </div>
+
+          <div class="profile-section" v-if="currentRoleFields.length">
+            <div class="profile-section-title">
+              <span :style="{ color: roleConfig.color || 'var(--blue)' }">&bull;</span>
+              {{ roleConfig.label }} - 专属档案
+            </div>
+            <div v-for="field in currentRoleFields" :key="field.key" class="input-group">
+              <label class="input-label">{{ field.label }}</label>
+              <select v-if="field.type === 'select'" class="input-field" v-model="profExtra[field.key]">
+                <option value="">-- 请选择 --</option>
+                <option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
+              </select>
+              <textarea v-else-if="field.type === 'textarea'" class="input-field"
+                        v-model="profExtra[field.key]" rows="3"
+                        :placeholder="field.placeholder"></textarea>
+              <input v-else class="input-field"
+                     v-model="profExtra[field.key]"
+                     :placeholder="field.placeholder">
+            </div>
+          </div>
+
+          <!-- 院长/副院长管理面板 -->
+          <div class="profile-section" v-if="isDirectorProfile">
+            <div class="profile-section-title">
+              <span style="color:#ff6b35">&#9733;</span> 主持功能 - 快速调整玩家属性
+            </div>
+            <select class="input-field" v-model="adminEditTarget"
+                    style="margin-bottom:8px;font-size:12px">
+              <option value="">-- 选择要修改的玩家 --</option>
+              <option v-for="cs in allCharStates" :key="cs.userId" :value="cs.userId">
+                {{ cs.name }} ({{ ROLE_CONFIG[cs.role]?.label || cs.role }})
+              </option>
+            </select>
+            <div style="display:grid;grid-template-columns:1fr 90px auto;gap:6px;align-items:center">
+              <input class="input-field" v-model="adminEditKey"
+                     placeholder="属性名 (如 sanity)" style="font-size:12px">
+              <input class="input-field" v-model="adminEditVal"
+                     type="number" placeholder="值" style="font-size:12px">
+              <button class="btn btn-ghost btn-sm" @click="doUpdateStat">修改</button>
+            </div>
+            <div style="font-size:10px;color:var(--txt2);margin-top:8px;line-height:1.75;padding:6px 8px;background:var(--bg2);border-radius:4px">
+              <strong>患者:</strong> sanity (精神值) / trust (信任度) / memoryFragments (记忆碎片) / medication (true/false 用药)<br>
+              <strong>职员:</strong> stress (压力值) / authority (权限)<br>
+              <strong>通用:</strong> notes / activity_range / shift 等自定义字段
+            </div>
+          </div>
+
+          <!-- 修改密码 -->
+          <div class="profile-section">
+            <div class="profile-section-title">修改密码 (可选)</div>
+            <div class="input-group">
+              <label class="input-label">当前密码</label>
+              <input class="input-field" type="password" v-model="profOldPwd" placeholder="输入当前使用的密码">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="input-group" style="margin-bottom:0">
+                <label class="input-label">新密码 (至少3位)</label>
+                <input class="input-field" type="password" v-model="profNewPwd" placeholder="新密码">
+              </div>
+              <div class="input-group" style="margin-bottom:0">
+                <label class="input-label">确认新密码</label>
+                <input class="input-field" type="password" v-model="profNewPwd2" placeholder="再次输入">
+              </div>
+            </div>
+          </div>
+
+          <div class="error-msg"   v-if="profError">{{ profError }}</div>
+          <div class="success-msg" v-if="profSuccess">{{ profSuccess }}</div>
+
+          <div style="display:flex;gap:10px;margin-top:4px">
+            <button class="btn btn-ghost" style="flex:0 0 100px" @click="closeProfile">取消</button>
+            <button class="btn btn-primary" style="flex:1" @click="doSaveProfile" :disabled="profLoading">
+              {{ profLoading ? '保存中...' : '保存修改' }}
+            </button>
+          </div>
+
+          <div class="profile-tips">
+            <div class="profile-tips-title">游戏须知</div>
+            <ul class="profile-tips-list">
+              <li>角色名称可修改, 但不能与其他玩家重复</li>
+              <li>身份类型一旦注册不可更改, 如需变更请联系主持人</li>
+              <li>背景简介将显示在你的角色卡上, 其他玩家可查看</li>
+              <li>不修改密码时, 当前密码栏可留空</li>
+              <li>游戏中的属性 (精神值、压力等) 由主持人统一调整</li>
+              <li>所有数据保存在云端数据库, 跨设备可用</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  </template>
+
+  <!-- ================================================
+       主病院
+  ================================================ -->
+  <template v-else-if="view === 'main'">
+  <div class="main-layout">
+
+    <!-- 顶栏 -->
+    <div class="topbar">
+      <div class="topbar-logo-char">怡</div>
+      <div class="topbar-title">[精神病院]</div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-time">{{ gameTimeStr }}</div>
+
+      <div class="topbar-user" v-if="char">
+        <div class="avatar-circle avatar-sm" style="cursor:pointer" @click="openProfile"
+             :style="{ background:(char.color||'#4e9ae1')+'25',
+                       color: char.color||'#4e9ae1',
+                       border:'1px solid '+(char.color||'#4e9ae1')+'50' }">
+          {{ char.avatar || char.name.charAt(0) }}
+        </div>
+        <span class="topbar-uname" style="cursor:pointer" @click="openProfile">{{ char.name }}</span>
+        <span class="tag-role"
+              :style="{ color: roleConfig.color||'var(--blue)',
+                        borderColor:(roleConfig.color||'var(--blue)')+'60',
+                        background:(roleConfig.color||'#4e9ae1')+'15' }">
+          {{ roleConfig.label || char.role }}
+        </span>
+        <button class="btn btn-ghost btn-sm" @click="openProfile" title="编辑个人档案">
+          个人档案
+        </button>
+        <button class="btn btn-ghost btn-sm" @click="doLogout">退出</button>
+      </div>
+    </div>
+
+    <!-- 内容区 -->
+    <div class="content">
+
+      <!-- 左侧边栏 -->
+      <div class="sidebar-left">
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">场景频道</div>
+          <div v-for="loc in visibleLocations" :key="loc.id"
+               class="location-item" :class="{ active: activeLocation === loc.id }"
+               @click="switchLocation(loc.id)">
+            <div class="loc-icon-badge">{{ loc.icon }}</div>
+            <span class="location-name">{{ loc.name }}</span>
+            <span class="location-count" v-if="locationCounts[loc.id]">{{ locationCounts[loc.id] }}</span>
+          </div>
+        </div>
+        <div class="sidebar-online">
+          <div class="sidebar-section-title" style="padding:10px 10px 7px">在线玩家</div>
+          <div class="online-list">
+            <div class="online-item" v-for="u in onlineList" :key="u.userId">
+              <div class="online-dot"></div>
+              <div class="avatar-circle avatar-xs"
+                   :style="{ background:(u.color||'#4e9ae1')+'25', color:u.color||'#4e9ae1' }">
+                {{ u.avatar || u.name.charAt(0) }}
+              </div>
+              <span class="online-uname">{{ u.name }}</span>
+              <span class="online-loc">{{ locationMap[u.location]?.icon || '?' }}</span>
+            </div>
+            <div class="empty-small" style="padding:6px 5px" v-if="!onlineList.length">暂无在线玩家</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 聊天区 -->
+      <div class="chat-area">
+        <div class="chat-loc-header">
+          <span class="loc-icon-badge" style="width:26px;height:26px;font-size:12px">{{ currentLocation.icon }}</span>
+          <span class="chat-loc-name">{{ currentLocation.name }}</span>
+          <span class="chat-loc-desc">{{ currentLocation.desc }}</span>
+        </div>
+
+        <!-- 同场景他人私聊提示栏 -->
+        <div class="active-privchats" v-if="activePrivChatsInLoc.length">
+          <div v-for="pair in activePrivChatsInLoc" :key="pair.key" class="privpair-item">
+            <span class="privpair-icon">&#128065;</span>
+            <span class="privpair-names">
+              {{ allUsers.find(u=>u.userId===pair.p1)?.name || '?' }}
+              <span style="opacity:.45">&harr;</span>
+              {{ allUsers.find(u=>u.userId===pair.p2)?.name || '?' }}
+            </span>
+            <span class="privpair-sub">正在私语</span>
+            <button class="btn btn-ghost edrop-btn btn-sm" @click="openEavesdropModal(pair)">&#128066; 偷听</button>
+          </div>
+        </div>
+
+        <div class="messages-list" ref="messagesEl">
+          <div class="empty-state" v-if="!messages.length">
+            <span>{{ currentLocation.name }} - 暂无消息, 开始扮演吧</span>
+          </div>
+          <div v-for="msg in messages" :key="msg.msgId || msg._dbId"
+               class="message"
+               :class="{ 'msg-private': msg.isPrivate, 'msg-system': msg.authorId === 'system' }">
+            <div class="avatar-circle avatar-sm"
+                 :style="{ background:(msg.authorColor||'#4e9ae1')+'25',
+                           color: msg.authorColor||'#4e9ae1',
+                           border:'1px solid '+(msg.authorColor||'#4e9ae1')+'40' }">
+              {{ msg.authorAvatar || msg.authorName.charAt(0) }}
+            </div>
+            <div class="msg-body">
+              <div class="msg-header-row">
+                <span class="msg-author" :style="msgAuthorColor(msg)">{{ msg.authorName }}</span>
+                <span class="msg-role-tag" v-if="msg.authorRole !== 'system'"
+                      :style="{ color: ROLE_CONFIG[msg.authorRole]?.color || '#8b949e' }">
+                  {{ ROLE_CONFIG[msg.authorRole]?.label || msg.authorRole }}
+                </span>
+                <span class="msg-private-tag" v-if="msg.isPrivate">
+                  私信 &rarr; {{ allUsers.find(u=>u.userId===msg.targetId)?.name || msg.targetId }}
+                </span>
+                <span class="msg-time">{{ fmtTime(msg.timestamp) }}</span>
+              </div>
+              <div class="msg-text">{{ msg.content }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 输入区 -->
+        <div class="input-area">
+          <div class="private-bar" v-if="isPrivate">
+            <span style="font-size:12px;color:var(--purple)">私信目标:</span>
+            <select class="private-select" v-model="privateTarget">
+              <option value="">-- 选择对象 --</option>
+              <option v-for="u in otherOnlineChars" :key="u.userId" :value="u.userId">{{ u.name }}</option>
+            </select>
+            <span style="font-size:11px;color:var(--txt2)">仅双方可见</span>
+          </div>
+          <div class="input-row">
+            <textarea class="chat-textarea" v-model="msgText" rows="2"
+                      placeholder="Enter 发送, Shift+Enter 换行..."
+                      @keydown="onKeydown"></textarea>
+            <button class="btn btn-primary send-btn" @click="sendMsg">发送</button>
+          </div>
+          <div class="input-hints">
+            <span class="hint-btn hint-btn-priv" @click="openPrivateModal()">&#128172; 私密交谈</span>
+            <span class="hint-sep">&middot;</span>
+            <span class="hint-info">{{ currentLocation.name }} - Enter 发送</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧面板 -->
+      <div class="panel-right">
+        <div class="panel-tabs">
+          <button class="panel-tab" :class="{ 'tab-active': activeRightTab==='char' }"
+                  @click="activeRightTab='char'">角色</button>
+          <button class="panel-tab" :class="{ 'tab-active': activeRightTab==='ann' }"
+                  @click="activeRightTab='ann'">公告</button>
+          <button class="panel-tab" :class="{ 'tab-active': activeRightTab==='notes' }"
+                  @click="activeRightTab='notes'">📝记事</button>
+          <button class="panel-tab" :class="{ 'tab-active': activeRightTab==='admin' }"
+                  v-if="isAdmin" @click="activeRightTab='admin'">主持</button>
+        </div>
+
+        <div class="panel-body">
+
+          <!-- 角色 Tab -->
+          <div v-if="activeRightTab === 'char'">
+            <div class="char-panel-hd">
+              <div class="avatar-circle avatar-lg" style="margin:0 auto"
+                   :style="{ background:(char?.color||'#4e9ae1')+'25',
+                             color: char?.color||'#4e9ae1',
+                             border:'1px solid '+(char?.color||'#4e9ae1')+'50' }">
+                {{ char?.avatar || char?.name?.charAt(0) }}
+              </div>
+              <div class="char-panel-name">{{ char?.name }}</div>
+              <div class="char-panel-role">{{ char?.title }}</div>
+              <div class="char-panel-desc" v-if="char?.description">{{ char.description }}</div>
+            </div>
+            <div class="divider"></div>
+
+            <template v-if="isPatient">
+              <div class="section-label">心理状态</div>
+              <div class="stat-row"><span class="stat-name">精神值</span><span class="stat-val">{{ charState.sanity ?? 65 }}</span></div>
+              <div class="prog-bar"><div class="prog-fill fill-purple" :style="{width:(charState.sanity??65)+'%'}"></div></div>
+              <div class="stat-row"><span class="stat-name">信任度</span><span class="stat-val">{{ charState.trust ?? 50 }}</span></div>
+              <div class="prog-bar"><div class="prog-fill fill-teal" :style="{width:(charState.trust??50)+'%'}"></div></div>
+              <div class="stat-row"><span class="stat-name">记忆碎片</span><span class="stat-val">{{ charState.memoryFragments ?? 0 }}/{{ charState.maxFragments ?? 8 }}</span></div>
+              <div class="prog-bar"><div class="prog-fill fill-blue" :style="{width:((charState.memoryFragments??0)/(charState.maxFragments??8)*100)+'%'}"></div></div>
+              <div class="stat-row" style="margin-top:6px">
+                <span class="stat-name">今日用药</span>
+                <span class="med-badge" :class="charState.medication ? 'med-ok' : 'med-no'">
+                  {{ charState.medication ? '已服药' : '未服药' }}
+                </span>
+              </div>
+              <div class="divider"></div>
+            </template>
+
+            <template v-else-if="isStaff">
+              <div class="section-label">工作状态</div>
+              <div class="stat-row"><span class="stat-name">压力值</span><span class="stat-val">{{ charState.stress ?? 30 }}</span></div>
+              <div class="prog-bar"><div class="prog-fill fill-orange" :style="{width:(charState.stress??30)+'%'}"></div></div>
+              <div class="stat-row"><span class="stat-name">权限等级</span><span class="stat-val">{{ charState.authority ?? 60 }}</span></div>
+              <div class="prog-bar"><div class="prog-fill fill-blue" :style="{width:(charState.authority??60)+'%'}"></div></div>
+              <div class="divider"></div>
+            </template>
+
+            <template v-else>
+              <div class="section-label">状态</div>
+              <div class="stat-row"><span class="stat-name">信任度</span><span class="stat-val">{{ charState.trust ?? 60 }}</span></div>
+              <div class="prog-bar"><div class="prog-fill fill-teal" :style="{width:(charState.trust??60)+'%'}"></div></div>
+              <div class="divider"></div>
+            </template>
+
+            <div class="section-label">背包物品</div>
+            <div class="items-box" v-if="charState.items && charState.items.length">
+              <div class="item-chip" v-for="(item,i) in charState.items" :key="i">
+                <span style="font-size:12px;flex:1">{{ item }}</span>
+                <span @click="removeMyItem(i)" title="丢弃">x</span>
+              </div>
+            </div>
+            <div class="empty-small" v-else>背包为空</div>
+            <div class="add-item-row" style="margin-top:8px">
+              <input class="input-field add-item-input" v-model="newItemText"
+                     placeholder="获得物品..." @keydown.enter="addMyItem">
+              <button class="btn btn-ghost btn-sm" @click="addMyItem">+</button>
+            </div>
+
+            <div class="divider"></div>
+            <button class="btn btn-ghost btn-sm btn-full" @click="openProfile">编辑个人档案</button>
+          </div>
+
+          <!-- 公告 Tab -->
+          <div v-if="activeRightTab === 'ann'">
+            <div class="section-label">院内公告</div>
+            <div v-if="store.gameState.announcements.length">
+              <div v-for="ann in [...store.gameState.announcements].reverse()" :key="ann.id"
+                   class="ann-card" :class="annCssClass(ann.kind)">
+                <div class="ann-text">{{ ann.content }}</div>
+                <div class="ann-foot">{{ annKindLabel(ann.kind) }} - {{ fmtAnn(ann.timestamp) }}</div>
+              </div>
+            </div>
+            <div class="empty-small" v-else>暂无公告</div>
+          </div>
+
+          <!-- 记事本 Tab -->
+          <div v-if="activeRightTab === 'notes'">
+            <div class="section-label">📝 个人记事本</div>
+            <div style="font-size:11px;color:var(--txt2);margin-bottom:8px">
+              记录线索、计划、角色关系等，仅自己可见，自动保存到云端
+            </div>
+            <textarea class="input-field notes-textarea" v-model="myNotes" rows="15"
+                      placeholder="在这里记录你的想法、线索、计划...&#10;&#10;例如:&#10;- 在走廊听到奇怪声音&#10;- 护士张某行为可疑&#10;- 明天需要找到钥匙"
+                      @input="onNotesInput"></textarea>
+            <div class="notes-status-bar">
+              <span class="notes-status" :class="notesSaveStatus">
+                {{ notesSaveStatusText }}
+              </span>
+              <span style="font-size:10px;color:var(--txt2)">
+                {{ myNotes.length }} 字
+              </span>
+            </div>
+            <button class="btn btn-ghost btn-sm btn-full" style="margin-top:6px"
+                    @click="saveNotes" :disabled="notesSaving">
+              {{ notesSaving ? '保存中...' : '💾 立即保存' }}
+            </button>
+          </div>
+
+          <!-- 主持人 Tab -->
+          <div v-if="activeRightTab === 'admin' && isAdmin">
+
+            <div class="admin-block">
+              <div class="admin-block-title">时间轮</div>
+              <div class="admin-time-row">
+                <span class="admin-time-disp">{{ gameTimeStr }}</span>
+                <input class="input-field admin-num" type="number" v-model="adminTimeAdv" min="5" max="720">
+                <span style="font-size:11px;color:var(--txt2)">分钟</span>
+                <button class="btn btn-ghost btn-sm" @click="doAdvanceTime">推进</button>
+              </div>
+            </div>
+
+            <div class="admin-block">
+              <div class="admin-block-title">发布广播</div>
+              <textarea class="input-field" v-model="annText" rows="3"
+                        placeholder="输入广播内容..." style="margin-bottom:6px"></textarea>
+              <div style="display:flex;gap:6px">
+                <select class="input-field" v-model="annKind" style="flex:1;padding:5px 8px;font-size:12px">
+                  <option value="info">通知</option>
+                  <option value="warning">警告</option>
+                  <option value="alert">紧急</option>
+                </select>
+                <button class="btn btn-primary btn-sm" @click="doAnnouncement">发布</button>
+              </div>
+            </div>
+
+            <div class="admin-block">
+              <div class="admin-block-title">角色数据概览</div>
+              <div class="stat-preview">
+                <div class="stat-prev-row" v-for="cs in allCharStates" :key="cs.userId">
+                  <span style="font-size:11px">{{ cs.name }}</span>
+                  <span style="color:var(--txt2);font-size:10px">
+                    {{ locationMap[cs.state?.currentLocation]?.name || '?' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="admin-block">
+              <div class="admin-block-title">修改角色属性</div>
+              <select class="input-field" v-model="adminEditTarget" style="font-size:11px;margin-bottom:6px">
+                <option value="">-- 选择角色 --</option>
+                <option v-for="cs in allCharStates" :key="cs.userId" :value="cs.userId">{{ cs.name }}</option>
+              </select>
+              <div class="admin-edit-row">
+                <input class="input-field admin-edit-key" v-model="adminEditKey"
+                       placeholder="属性名 (如: sanity)">
+                <input class="input-field admin-edit-val" v-model="adminEditVal"
+                       placeholder="值" type="number">
+                <button class="btn btn-ghost btn-sm" @click="doUpdateStat">改</button>
+              </div>
+              <div style="font-size:10px;color:var(--txt2);margin-top:6px;line-height:1.7">
+                患者: sanity / trust / memoryFragments / medication<br>
+                职员: stress / authority<br>
+                通用: items (需赋值)
+              </div>
+            </div>
+
+            <div class="admin-block">
+              <div class="admin-block-title">危险操作</div>
+              <button class="btn btn-danger btn-sm btn-full" @click="store.clearMessages()">清空聊天记录</button>
+              <button class="btn btn-danger btn-sm btn-full" style="margin-top:6px" @click="store.resetGame()">重置所有游戏数据</button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </template>
+
+  <!-- 私密交谈 Modal -->
+  <div class="modal-overlay" v-if="showPrivateModal" @click.self="closePrivateModal">
+    <div class="modal-panel priv-modal">
+      <div class="modal-header">
+        <span class="modal-title">私密交谈</span>
+        <span class="modal-loc">{{ currentLocation.name }}</span>
+        <button class="btn-close" @click="closePrivateModal">&times;</button>
+      </div>
+      <div class="priv-target-bar">
+        <span>与谁交谈:</span>
+        <select class="priv-target-select" v-model="privChatTarget">
+          <option value="">&mdash; 选择交谈对象 &mdash;</option>
+          <option v-for="u in sameLocationChars" :key="u.userId" :value="u.userId">{{ u.name }}</option>
+        </select>
+      </div>
+      <div class="priv-messages" ref="privModalEl">
+        <div v-if="!privChatTarget" class="priv-empty">请先选择交谈对象</div>
+        <template v-else-if="privateChatMessages.length === 0">
+          <div class="priv-empty">开始私密交谈...同场景的人可能会偷听哦</div>
+        </template>
+        <template v-else>
+          <div v-for="msg in privateChatMessages" :key="msg.msgId || msg._dbId"
+               class="priv-msg" :class="{ 'priv-msg-self': msg.authorId === char.userId }">
+            <div class="priv-msg-row">
+              <span class="priv-msg-author" :style="{ color: msg.authorColor }">{{ msg.authorName }}</span>
+              <span class="priv-msg-time">{{ fmtTime(msg.timestamp) }}</span>
+            </div>
+            <div class="priv-msg-text">{{ msg.content }}</div>
+          </div>
+        </template>
+      </div>
+      <div class="priv-input-row">
+        <textarea class="chat-textarea" v-model="privChatMsg" rows="2"
+                  placeholder="私密内容 (仅对方可见)..." @keydown="onPrivKeydown"
+                  :disabled="!privChatTarget" style="flex:1"></textarea>
+        <button class="btn btn-primary send-btn" @click="sendPrivateMsg"
+                :disabled="!privChatTarget">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 偷听 Modal -->
+  <div class="modal-overlay" v-if="showEavesdropModal" @click.self="closeEavesdropModal">
+    <div class="modal-panel eavesdrop-modal">
+      <div class="modal-header">
+        <span class="modal-title">&#128066; 偷听</span>
+        <button class="btn-close" @click="closeEavesdropModal">&times;</button>
+      </div>
+      <div class="edrop-pair-info" v-if="eavesdropPair">
+        <strong>{{ allUsers.find(u=>u.userId===eavesdropPair.p1)?.name || '?' }}</strong>
+        &nbsp;与&nbsp;
+        <strong>{{ allUsers.find(u=>u.userId===eavesdropPair.p2)?.name || '?' }}</strong>
+        的私密交谈
+      </div>
+      <div class="edrop-dice-area">
+        <div class="dice-display"
+             :class="{ rolling: eavesdropRolling,
+                       'roll-success': eavesdropResult?.success,
+                       'roll-fail': eavesdropResult && !eavesdropResult.success }">
+          <span class="dice-num">{{ eavesdropRolling ? eavesdropDisplayNum : (eavesdropResult ? eavesdropResult.roll : '?') }}</span>
+          <span class="dice-label">1 D 100</span>
+        </div>
+        <div class="edrop-threshold" v-if="eavesdropResult">
+          需要 &gt; {{ eavesdropResult.threshold }} 以上 - 你掷出了 {{ eavesdropResult.roll }}
+        </div>
+        <div class="edrop-threshold" v-else>掷骰子决定是否能偷听 (需 41+ 成功)</div>
+      </div>
+      <div class="edrop-result" v-if="eavesdropResult">
+        <div v-if="eavesdropResult.success" class="edrop-success">
+          &#10004; 偷听成功! 你可以查看这段私密对话 (10 分钟后失效)
+        </div>
+        <div v-else class="edrop-fail">
+          &#10008; 偷听失败! 对方觉察到了异动, 请当心...
+        </div>
+      </div>
+      <div class="edrop-messages" v-if="eavesdropResult?.success">
+        <div class="section-label" style="margin-bottom:6px">偷听到的内容</div>
+        <div v-if="eavesdroppedMsgs.length === 0" class="empty-small">(暂无对话内容)</div>
+        <div v-for="msg in eavesdroppedMsgs" :key="msg.msgId || msg._dbId" class="priv-msg edrop-msg">
+          <div class="priv-msg-row">
+            <span class="priv-msg-author" :style="{ color: msg.authorColor }">{{ msg.authorName }}</span>
+            <span class="priv-msg-time">{{ fmtTime(msg.timestamp) }}</span>
+          </div>
+          <div class="priv-msg-text">{{ msg.content }}</div>
+        </div>
+      </div>
+      <div class="edrop-btn-row">
+        <button class="btn btn-ghost btn-sm" @click="closeEavesdropModal">关闭</button>
+        <button class="btn btn-primary btn-sm" @click="doRollEavesdrop"
+                :disabled="eavesdropRolling">
+          {{ eavesdropRolling ? '掷骰中...' : (eavesdropResult ? '再次掷骰' : '掷骰 - 尝试偷听') }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 通知 -->
+  <div class="notifications-wrap">
+    <div v-for="n in store.notifications" :key="n.id"
+         class="toast" :class="'toast-'+n.kind">
+      {{ n.msg }}
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script src="js/vue.js"></script>
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<!-- Import Map: 修复 text-encoding-shim 的 ESM 导出问题 (浏览器已原生支持 TextEncoder/TextDecoder) -->
+<script type="importmap">
+{
+  "imports": {
+    "https://esm.sh/text-encoding-shim@^1.0.5?target=es2022": "./js/text-encoding-shim.js",
+    "https://esm.sh/text-encoding-shim@1.0.5?target=es2022": "./js/text-encoding-shim.js",
+    "https://esm.sh/text-encoding-shim@^1.0.5": "./js/text-encoding-shim.js",
+    "https://esm.sh/text-encoding-shim@1.0.5": "./js/text-encoding-shim.js"
+  },
+  "scopes": {
+    "https://esm.sh/": {
+      "text-encoding-shim@^1.0.5?target=es2022": "./js/text-encoding-shim.js",
+      "text-encoding-shim@1.0.5?target=es2022": "./js/text-encoding-shim.js",
+      "text-encoding-shim@^1.0.5": "./js/text-encoding-shim.js",
+      "text-encoding-shim@1.0.5": "./js/text-encoding-shim.js"
+    }
+  }
+}
+</script>
+<!-- CloudBase SDK v2 通过 ES Module 加载, 然后动态加载其余脚本 -->
+<script type="module" src="js/loader.js"></script>
+</body>
+</html>
